@@ -57,27 +57,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     rsi = calculate_rsi(df).iloc[-1]
                     ema20 = df.ewm(span=20, adjust=False).mean().iloc[-1]
                     ema50 = df.ewm(span=50, adjust=False).mean().iloc[-1]
-
 signal = None
 
-# Confirmation logic
-if rsi < 30 and ema20 > ema50:
-    signal = "STRONG_BUY"
+    if rsi < 30 and ema20 > ema50:
+        signal = "STRONG_BUY"
 
-elif rsi > 70 and ema20 < ema50:
-    signal = "STRONG_SELL"
+    elif rsi > 70 and ema20 < ema50:
+        signal = "STRONG_SELL"
 
-                    signal = None
+    if signal:
+        await websocket.send_json({
+            "type": signal,
+            "price": close_price,
+            "timestamp": int(kline['T']),
+            "confidence": 90
+        })
 
-                    if rsi < 30:
-                        signal = "STRONG_BUY"
-                    elif rsi > 70:
-                        signal = "STRONG_SELL"
-
-                    if signal:
-                        await websocket.send_json({
-                            "type": signal,
-                            "price": close_price,
-                            "timestamp": int(kline['T']),
-                            "confidence": 85
-                        })
