@@ -53,7 +53,7 @@ export default function App() {
   // WebSocket Connection
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/live`;
+    const wsUrl = "wss://signal-engine-production-28aa.up.railway.app/ws/live";
     
     wsRef.current = new WebSocket(wsUrl);
 
