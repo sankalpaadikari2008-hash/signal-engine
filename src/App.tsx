@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SignalBox } from './components/SignalBox';
 import { Chart } from './components/Chart';
 import { Zap } from 'lucide-react';
+import { useEffect } from "react";
 
 interface Signal {
   type: "STRONG_BUY" | "STRONG_SELL";
