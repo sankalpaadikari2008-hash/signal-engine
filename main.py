@@ -1,12 +1,13 @@
-from fastapi import FastAPI, WebSocket 
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-import time
-import random
+import json
+import pandas as pd
+import numpy as np
+from binance import AsyncClient, BinanceSocketManager
 
 app = FastAPI()
 
-# Enable CORS (important for Vercel frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,24 +20,53 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
-# WebSocket route
+# === Indicator Logic ===
+def calculate_rsi(data, period=14):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# === WebSocket Route ===
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("Client connected")
 
-    try:
+    client = await AsyncClient.create()
+    bm = BinanceSocketManager(client)
+
+    socket = bm.kline_socket(symbol="BTCUSDT", interval="1m")
+
+    closes = []
+
+    async with socket as stream:
         while True:
-            # Fake signal for testing
-            signal = {
-                "type": random.choice(["STRONG_BUY", "STRONG_SELL"]),
-                "price": 65000 + random.randint(-500, 500),
-                "timestamp": int(time.time() * 1000),
-                "confidence": random.randint(80, 95)
-            }
+            res = await stream.recv()
+            kline = res['k']
 
-            await websocket.send_json(signal)
-            await asyncio.sleep(5)
+            if kline['x']:  # candle closed
+                close_price = float(kline['c'])
+                closes.append(close_price)
 
-    except Exception as e:
-        print("Client disconnected", e)
+                if len(closes) > 50:
+                    closes.pop(0)
+
+                if len(closes) > 14:
+                    df = pd.Series(closes)
+                    rsi = calculate_rsi(df).iloc[-1]
+
+                    signal = None
+
+                    if rsi < 30:
+                        signal = "STRONG_BUY"
+                    elif rsi > 70:
+                        signal = "STRONG_SELL"
+
+                    if signal:
+                        await websocket.send_json({
+                            "type": signal,
+                            "price": close_price,
+                            "timestamp": int(kline['T']),
+                            "confidence": 85
+                        })
